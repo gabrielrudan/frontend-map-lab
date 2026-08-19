@@ -1,12 +1,9 @@
-import CoordinateCard from "@/components/CoordinateCard";
+import DynamicMap from "@/components/map/dynamic-map";
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen items-center justify-center p-8">
-      <CoordinateCard
-        latitude={-3.7319}
-        longitude={-38.5267}
-      />
+    <main className="h-screen w-screen">
+      <DynamicMap />
     </main>
   );
 }
