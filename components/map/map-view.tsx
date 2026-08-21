@@ -1,15 +1,41 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
+
+import CreateLocationModal from "@/components/location/create-location-modal";
+import LocationDetailsModal from "@/components/location/location-details-modal";
+import type { Location } from "@/types/location";
+
+import "./lib/mapWorker";
+
+type Position = {
+  lat: number;
+  lng: number;
+};
 
 export default function MapView() {
   const mapContainer = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<maplibregl.Marker[]>([]);
 
+  const [locations, setLocations] = useState<Location[]>([]);
+
+  const [selectedPosition, setSelectedPosition] =
+    useState<Position | null>(null);
+
+  const [isCreateModalOpen, setIsCreateModalOpen] =
+    useState(false);
+
+  const [selectedLocation, setSelectedLocation] =
+    useState<Location | null>(null);
+
+  const [isDetailsModalOpen, setIsDetailsModalOpen] =
+    useState(false);
+
+  // Criação do mapa
   useEffect(() => {
-    console.log("MapView: useEffect executado");
-
-    if (!mapContainer.current) return;
+    if (!mapContainer.current || mapRef.current) return;
 
     const map = new maplibregl.Map({
       container: mapContainer.current,
@@ -39,20 +65,111 @@ export default function MapView() {
       zoom: 11,
     });
 
-    console.log("MapView: instância do mapa criada");
+    mapRef.current = map;
 
-    map.on("load", () => {
-      console.log("MapView: mapa carregado");
+    map.addControl(
+      new maplibregl.NavigationControl(),
+      "bottom-left",
+    );
+
+    map.on("click", (event) => {
+      const { lat, lng } = event.lngLat;
+
+      setSelectedPosition({ lat, lng });
+      setIsCreateModalOpen(true);
     });
 
     map.on("error", (event) => {
-      console.error("MapView: erro", event.error);
+      console.error("Erro no MapLibre:", event.error);
     });
 
     return () => {
+      markersRef.current.forEach((marker) => marker.remove());
+      markersRef.current = [];
+
       map.remove();
+      mapRef.current = null;
     };
   }, []);
 
-  return <div ref={mapContainer} className="h-screen w-full" />;
+  // Atualiza os markers sempre que locations mudar
+  useEffect(() => {
+    const map = mapRef.current;
+
+    if (!map) return;
+
+    markersRef.current.forEach((marker) => {
+      marker.remove();
+    });
+
+    markersRef.current = locations.map((location) => {
+      const markerElement = document.createElement("button");
+
+      markerElement.type = "button";
+
+      markerElement.setAttribute(
+        "aria-label",
+        location.name,
+      );
+
+      // Tooltip simples no hover
+      markerElement.title = location.name;
+
+      markerElement.className =
+        "h-5 w-5 cursor-pointer rounded-full border-2 border-white bg-red-600 shadow-md";
+
+      markerElement.addEventListener("click", (event) => {
+        // Impede que o clique no marker também seja
+        // interpretado como clique no mapa.
+        event.stopPropagation();
+
+        setSelectedLocation(location);
+        setIsDetailsModalOpen(true);
+      });
+
+      return new maplibregl.Marker({
+        element: markerElement,
+      })
+        .setLngLat([location.lng, location.lat])
+        .addTo(map);
+    });
+  }, [locations]);
+
+  function handleLocationCreated(location: Location) {
+    setLocations((previousLocations) => [
+      ...previousLocations,
+      location,
+    ]);
+
+    setSelectedPosition(null);
+    setIsCreateModalOpen(false);
+  }
+
+  return (
+    <>
+      <div
+        ref={mapContainer}
+        className="h-screen w-full"
+      />
+
+      <CreateLocationModal
+        open={isCreateModalOpen}
+        position={selectedPosition}
+        onCancel={() => {
+          setSelectedPosition(null);
+          setIsCreateModalOpen(false);
+        }}
+        onLocationCreated={handleLocationCreated}
+      />
+
+      <LocationDetailsModal
+        open={isDetailsModalOpen}
+        location={selectedLocation}
+        onCancel={() => {
+          setSelectedLocation(null);
+          setIsDetailsModalOpen(false);
+        }}
+      />
+    </>
+  );
 }
