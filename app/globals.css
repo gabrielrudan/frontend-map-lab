@@ -129,3 +129,140 @@
     @apply font-sans;
   }
 }
+
+/* =========================================================
+   MAPLIBRE
+   ========================================================= */
+
+.maplibregl-map {
+  background: #080d16;
+}
+
+
+/* =========================================================
+   MARKERS
+   ========================================================= */
+
+.map-pin {
+  position: relative;
+
+  width: 34px;
+  height: 34px;
+
+  padding: 0;
+  margin: 0;
+
+  border: 3px solid #dbeafe;
+  border-radius: 50% 50% 50% 0;
+
+  background: #2563eb;
+
+  transform: rotate(-45deg);
+
+  cursor: pointer;
+
+  box-shadow:
+    0 4px 12px rgb(0 0 0 / 45%),
+    0 0 14px rgb(37 99 235 / 45%);
+
+  transition:
+    transform 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+
+/* Bolinha interna do pin */
+.map-pin::after {
+  content: "";
+
+  position: absolute;
+
+  width: 10px;
+  height: 10px;
+
+  top: 9px;
+  left: 9px;
+
+  border-radius: 50%;
+
+  background: #eff6ff;
+
+  box-shadow: 0 0 5px rgb(255 255 255 / 40%);
+}
+
+
+/* Hover */
+.map-pin:hover {
+  background: #3b82f6;
+
+  transform:
+    rotate(-45deg)
+    scale(1.12);
+
+  box-shadow:
+    0 5px 16px rgb(0 0 0 / 55%),
+    0 0 20px rgb(59 130 246 / 70%);
+
+  z-index: 10;
+}
+
+
+/* Teclado / acessibilidade */
+.map-pin:focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 3px;
+}
+
+
+/* =========================================================
+   CONTROLES DO MAPLIBRE
+   ========================================================= */
+
+.maplibregl-ctrl-group {
+  overflow: hidden;
+
+  border: 1px solid rgb(148 163 184 / 20%) !important;
+  border-radius: 10px !important;
+
+  background: rgb(15 23 42 / 92%) !important;
+
+  box-shadow: 0 6px 18px rgb(0 0 0 / 25%) !important;
+}
+
+
+.maplibregl-ctrl-group button {
+  background-color: transparent !important;
+}
+
+
+.maplibregl-ctrl-group button:hover {
+  background-color: rgb(37 99 235 / 20%) !important;
+}
+
+
+/* Ícones dos controles ficam claros */
+.maplibregl-ctrl-icon {
+  filter: invert(1) brightness(1.8);
+}
+
+
+/* Separador entre os controles */
+.maplibregl-ctrl-group button + button {
+  border-top-color: rgb(148 163 184 / 15%) !important;
+}
+
+
+/* Attribution */
+.maplibregl-ctrl-attrib {
+  border: 1px solid rgb(148 163 184 / 15%);
+
+  background: rgb(15 23 42 / 80%) !important;
+
+  color: #94a3b8;
+}
+
+
+.maplibregl-ctrl-attrib a {
+  color: #60a5fa !important;
+}

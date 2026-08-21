@@ -42,6 +42,7 @@ export default function MapView() {
 
       style: {
         version: 8,
+
         sources: {
           osm: {
             type: "raster",
@@ -52,11 +53,29 @@ export default function MapView() {
             attribution: "© OpenStreetMap contributors",
           },
         },
+
         layers: [
+          // Fundo usado enquanto os tiles estão carregando
+          {
+            id: "dark-background",
+            type: "background",
+            paint: {
+              "background-color": "#080d16",
+            },
+          },
+
+          // Mapa base escurecido e levemente azulado
           {
             id: "osm",
             type: "raster",
             source: "osm",
+            paint: {
+              "raster-brightness-min": 0.02,
+              "raster-brightness-max": 0.42,
+              "raster-contrast": 0.35,
+              "raster-saturation": -0.65,
+              "raster-hue-rotate": 185,
+            },
           },
         ],
       },
@@ -106,21 +125,17 @@ export default function MapView() {
       const markerElement = document.createElement("button");
 
       markerElement.type = "button";
+      markerElement.className = "map-pin";
+      markerElement.title = location.name;
 
       markerElement.setAttribute(
         "aria-label",
-        location.name,
+        `Abrir detalhes de ${location.name}`,
       );
 
-      // Tooltip simples no hover
-      markerElement.title = location.name;
-
-      markerElement.className =
-        "h-5 w-5 cursor-pointer rounded-full border-2 border-white bg-red-600 shadow-md";
-
       markerElement.addEventListener("click", (event) => {
-        // Impede que o clique no marker também seja
-        // interpretado como clique no mapa.
+        // Impede que o clique no marker abra também
+        // o modal de criação de um novo local.
         event.stopPropagation();
 
         setSelectedLocation(location);
@@ -129,6 +144,7 @@ export default function MapView() {
 
       return new maplibregl.Marker({
         element: markerElement,
+        anchor: "bottom",
       })
         .setLngLat([location.lng, location.lat])
         .addTo(map);
