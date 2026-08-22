@@ -86,29 +86,54 @@ export default function CreateLocationModal({
         }
       }}
     >
-      <DialogContent>
+      <DialogContent
+        className="
+          border-slate-800
+          bg-slate-950
+          text-slate-100
+          shadow-2xl
+          sm:max-w-md
+        "
+      >
         <DialogHeader>
-          <DialogTitle>Cadastrar local</DialogTitle>
+          <DialogTitle className="text-xl font-semibold tracking-tight text-white">
+            Cadastrar local
+          </DialogTitle>
 
-          <DialogDescription>
+          <DialogDescription className="text-slate-400">
             Informe os dados do novo ponto.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-2">
-            <Label htmlFor="location-name">Nome</Label>
+            <Label
+              htmlFor="location-name"
+              className="text-sm font-medium text-slate-300"
+            >
+              Nome
+            </Label>
 
             <Input
               id="location-name"
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="Nome do local"
+              className="
+                border-slate-800
+                bg-slate-900
+                text-slate-100
+                placeholder:text-slate-500
+                focus-visible:ring-blue-500
+              "
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="location-description">
+            <Label
+              htmlFor="location-description"
+              className="text-sm font-medium text-slate-300"
+            >
               Descrição
             </Label>
 
@@ -117,11 +142,22 @@ export default function CreateLocationModal({
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               placeholder="Descrição do local"
+              className="
+                min-h-24
+                resize-none
+                border-slate-800
+                bg-slate-900
+                text-slate-100
+                placeholder:text-slate-500
+                focus-visible:ring-blue-500
+              "
             />
           </div>
 
           <div className="space-y-2">
-            <Label>Tipo</Label>
+            <Label className="text-sm font-medium text-slate-300">
+              Tipo
+            </Label>
 
             <Select
               value={type}
@@ -129,11 +165,18 @@ export default function CreateLocationModal({
                 setType(value ?? "");
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger
+                className="
+                  border-slate-800
+                  bg-slate-900
+                  text-slate-100
+                  focus:ring-blue-500
+                "
+              >
                 <SelectValue placeholder="Selecione um tipo" />
               </SelectTrigger>
 
-              <SelectContent>
+              <SelectContent className="border-slate-800 bg-slate-900 text-slate-100">
                 <SelectItem value="tipo-a">Tipo A</SelectItem>
                 <SelectItem value="tipo-b">Tipo B</SelectItem>
                 <SelectItem value="tipo-c">Tipo C</SelectItem>
@@ -142,22 +185,41 @@ export default function CreateLocationModal({
           </div>
 
           {position && (
-            <p className="text-sm text-muted-foreground">
-              Coordenadas: {position.lat.toFixed(5)},{" "}
-              {position.lng.toFixed(5)}
-            </p>
+            <div className="rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2">
+              <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                Coordenadas
+              </span>
+
+              <p className="mt-1 font-mono text-xs text-slate-300">
+                {position.lat.toFixed(5)}, {position.lng.toFixed(5)}
+              </p>
+            </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button
               type="button"
               variant="outline"
               onClick={handleCancel}
+              className="
+                border-slate-700
+                bg-transparent
+                text-slate-300
+                hover:bg-slate-800
+                hover:text-white
+              "
             >
               Cancelar
             </Button>
 
-            <Button type="submit">
+            <Button
+              type="submit"
+              className="
+                bg-blue-600
+                text-white
+                hover:bg-blue-500
+              "
+            >
               Cadastrar
             </Button>
           </DialogFooter>
