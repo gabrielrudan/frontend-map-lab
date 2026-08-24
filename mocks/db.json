@@ -7,6 +7,22 @@
       "lat": -3.731192514550415,
       "lng": -38.526030246793056,
       "id": "7W2Exsc05Kg"
+    },
+    {
+      "name": "Local 2",
+      "description": "Descrição do local 2, teste de traçar linha",
+      "type": "tipo-b",
+      "lat": -3.729859967926572,
+      "lng": -38.52927226089082,
+      "id": "YafIm1rC4Lw"
+    },
+    {
+      "name": "Local 3",
+      "description": "teste 3",
+      "type": "tipo-a",
+      "lat": -3.7293952851359364,
+      "lng": -38.5268251801092,
+      "id": "tEYJDjksavs"
     }
   ],
   "zones": [],

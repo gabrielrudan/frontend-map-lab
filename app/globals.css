@@ -171,6 +171,19 @@
     box-shadow 150ms ease;
 }
 
+.map-pin-selected {
+  background: #60a5fa;
+
+  box-shadow:
+    0 5px 18px rgb(0 0 0 / 60%),
+    0 0 0 5px rgb(59 130 246 / 20%),
+    0 0 24px rgb(59 130 246 / 90%);
+}
+
+.map-pin-selected::after {
+  background: #ffffff;
+}
+
 
 /* Bolinha interna do pin */
 .map-pin::after {
