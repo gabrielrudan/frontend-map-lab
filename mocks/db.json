@@ -69,6 +69,13 @@
       "id": "Gg-c0HAe8x8"
     }
   ],
-  "relations": [],
+  "relations": [
+    {
+      "name": "Entrega para",
+      "sourceId": "YafIm1rC4Lw",
+      "targetId": "7W2Exsc05Kg",
+      "id": "URbYEAfICIU"
+    }
+  ],
   "$schema": "./node_modules/json-server/schema.json"
 }

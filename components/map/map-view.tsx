@@ -9,9 +9,11 @@ import { pointsInPolygon } from "@/utils/poinstInPolygon";
 import CreateLocationModal from "@/components/location/create-location-modal";
 import LocationDetailsModal from "@/components/location/location-details-modal";
 import CreateZoneModal from "@/components/zone/create-zone-modal";
+import CreateRelationModal from "@/components/relation/create-relation-modal";
 
 import { locationService } from "@/services/locationService";
 import { zoneService } from "@/services/zoneService";
+import { relationService } from "@/services/relationService";
 
 import type * as GeoJSON from "geojson";
 
@@ -24,6 +26,10 @@ import type {
   CreateZoneFormDto,
   Zone,
 } from "@/types/zone";
+import type {
+  CreateRelationFormDto,
+  Relation,
+} from "@/types/relation";
 
 import "./lib/mapWorker";
 
@@ -112,6 +118,22 @@ export default function MapView() {
     setSelectedLineLocationIds,
   ] = useState<string[]>([]);
 
+  const [relations, setRelations] =
+    useState<Relation[]>([]);
+
+  const [
+    pendingRelation,
+    setPendingRelation,
+  ] = useState<{
+    sourceId: string;
+    targetId: string;
+  } | null>(null);
+
+  const [
+    isRelationModalOpen,
+    setIsRelationModalOpen,
+  ] = useState(false);
+
   /*
    * =====================================================
    * ZONAS
@@ -192,6 +214,20 @@ export default function MapView() {
     }
   }
 
+  async function loadRelations() {
+    try {
+      const data =
+        await relationService.getAll();
+
+      setRelations(data);
+    } catch (error) {
+      console.error(
+        "Erro ao carregar relações:",
+        error,
+      );
+    }
+  }
+
   // Carrega locais persistidos
   useEffect(() => {
     let cancelled = false;
@@ -229,6 +265,29 @@ export default function MapView() {
       .catch((error) => {
         console.error(
           "Erro ao carregar zonas:",
+          error,
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Carrega relações persistidas
+  useEffect(() => {
+    let cancelled = false;
+
+    relationService
+      .getAll()
+      .then((data) => {
+        if (!cancelled) {
+          setRelations(data);
+        }
+      })
+      .catch((error) => {
+        console.error(
+          "Erro ao carregar relações:",
           error,
         );
       });
@@ -334,6 +393,51 @@ export default function MapView() {
           "line-color": "#3b82f6",
           "line-width": 4,
           "line-opacity": 0.9,
+        },
+      });
+
+      /*
+       * -----------------------------------------------
+       * Relações persistidas
+       * -----------------------------------------------
+       */
+
+      map.addSource("relations", {
+        type: "geojson",
+        data: emptyFeatureCollection,
+      });
+
+      map.addLayer({
+        id: "relations-casing",
+        type: "line",
+        source: "relations",
+
+        layout: {
+          "line-cap": "round",
+          "line-join": "round",
+        },
+
+        paint: {
+          "line-color": "#ffffff",
+          "line-width": 7,
+          "line-opacity": 0.65,
+        },
+      });
+
+      map.addLayer({
+        id: "relations-line",
+        type: "line",
+        source: "relations",
+
+        layout: {
+          "line-cap": "round",
+          "line-join": "round",
+        },
+
+        paint: {
+          "line-color": "#22c55e",
+          "line-width": 4,
+          "line-dasharray": [2, 1],
         },
       });
 
@@ -669,33 +773,63 @@ export default function MapView() {
             }
 
             /*
-             * Modo de linha
+             * Modo de relação
              */
             if (isLineMode) {
-              setSelectedLineLocationIds(
-                (previous) => {
-                  if (
-                    previous.includes(
-                      location.id,
-                    )
-                  ) {
-                    return previous;
-                  }
+              if (
+                selectedLineLocationIds.includes(
+                  location.id,
+                )
+              ) {
+                return;
+              }
 
-                  if (
-                    previous.length >= 2
-                  ) {
-                    return [
-                      location.id,
-                    ];
-                  }
+              if (
+                selectedLineLocationIds.length === 0
+              ) {
+                setSelectedLineLocationIds([
+                  location.id,
+                ]);
 
-                  return [
-                    ...previous,
-                    location.id,
-                  ];
-                },
-              );
+                return;
+              }
+
+              const sourceId =
+                selectedLineLocationIds[0];
+
+              const targetId =
+                location.id;
+
+              const relationAlreadyExists =
+                relations.some(
+                  (relation) =>
+                    (relation.sourceId === sourceId &&
+                      relation.targetId === targetId) ||
+                    (relation.sourceId === targetId &&
+                      relation.targetId === sourceId),
+                );
+
+              if (relationAlreadyExists) {
+                console.warn(
+                  "Já existe uma relação entre esses locais.",
+                );
+
+                setSelectedLineLocationIds([]);
+
+                return;
+              }
+
+              setSelectedLineLocationIds([
+                sourceId,
+                targetId,
+              ]);
+
+              setPendingRelation({
+                sourceId,
+                targetId,
+              });
+
+              setIsRelationModalOpen(true);
 
               return;
             }
@@ -729,6 +863,7 @@ export default function MapView() {
     isLineMode,
     isZoneMode,
     selectedLineLocationIds,
+    relations,
   ]);
 
   /*
@@ -815,6 +950,95 @@ export default function MapView() {
   }, [
     isMapLoaded,
     selectedLineLocationIds,
+    locations,
+  ]);
+
+  /*
+   * =====================================================
+   * RELAÇÕES PERSISTIDAS
+   * =====================================================
+   */
+
+  useEffect(() => {
+    if (!isMapLoaded) return;
+
+    const map = mapRef.current;
+
+    if (!map) return;
+
+    const source =
+      map.getSource(
+        "relations",
+      ) as
+        | maplibregl.GeoJSONSource
+        | undefined;
+
+    if (!source) return;
+
+    const features = relations.flatMap(
+      (relation) => {
+        const sourceLocation =
+          locations.find(
+            (location) =>
+              location.id ===
+              relation.sourceId,
+          );
+
+        const targetLocation =
+          locations.find(
+            (location) =>
+              location.id ===
+              relation.targetId,
+          );
+
+        if (
+          !sourceLocation ||
+          !targetLocation
+        ) {
+          return [];
+        }
+
+        return [
+          {
+            type: "Feature" as const,
+
+            properties: {
+              id: relation.id,
+              name: relation.name,
+              sourceId: relation.sourceId,
+              targetId: relation.targetId,
+              sourceName:
+                sourceLocation.name,
+              targetName:
+                targetLocation.name,
+            },
+
+            geometry: {
+              type: "LineString" as const,
+
+              coordinates: [
+                [
+                  sourceLocation.lng,
+                  sourceLocation.lat,
+                ],
+                [
+                  targetLocation.lng,
+                  targetLocation.lat,
+                ],
+              ],
+            },
+          },
+        ];
+      },
+    );
+
+    source.setData({
+      type: "FeatureCollection",
+      features,
+    });
+  }, [
+    isMapLoaded,
+    relations,
     locations,
   ]);
 
@@ -1056,6 +1280,40 @@ export default function MapView() {
 
   /*
    * =====================================================
+   * CADASTRO DE RELAÇÃO
+   * =====================================================
+   */
+
+  async function handleRelationCreated(
+    data: CreateRelationFormDto,
+  ) {
+    if (!pendingRelation) return;
+
+    try {
+      await relationService.create({
+        name: data.name,
+        sourceId:
+          pendingRelation.sourceId,
+        targetId:
+          pendingRelation.targetId,
+      });
+
+      await loadRelations();
+
+      setPendingRelation(null);
+      setSelectedLineLocationIds([]);
+      setIsRelationModalOpen(false);
+      setIsLineMode(false);
+    } catch (error) {
+      console.error(
+        "Erro ao cadastrar relação:",
+        error,
+      );
+    }
+  }
+
+  /*
+   * =====================================================
    * CONTROLES DA LINHA
    * =====================================================
    */
@@ -1070,6 +1328,8 @@ export default function MapView() {
     setDrawingCoordinates([]);
 
     setSelectedLineLocationIds([]);
+    setPendingRelation(null);
+    setIsRelationModalOpen(false);
   }
 
   function clearLine() {
@@ -1135,8 +1395,8 @@ export default function MapView() {
           }
         >
           {isLineMode
-            ? "Traçando linha"
-            : "Traçar linha"}
+            ? "Relacionando locais"
+            : "Relacionar locais"}
         </button>
 
         {/* Zona */}
@@ -1203,15 +1463,15 @@ export default function MapView() {
         <div className="absolute left-4 top-16 z-10 rounded-lg border border-slate-800 bg-slate-950/90 px-4 py-3 text-sm text-slate-300 shadow-lg">
           {selectedLineLocationIds.length ===
             0 &&
-            "Selecione o primeiro ponto."}
+            "Selecione o local de origem."}
 
           {selectedLineLocationIds.length ===
             1 &&
-            "Agora selecione o segundo ponto."}
+            "Agora selecione o local de destino."}
 
           {selectedLineLocationIds.length ===
             2 &&
-            "Linha criada entre os dois pontos."}
+            "Defina o nome da relação no formulário."}
         </div>
       )}
 
@@ -1263,6 +1523,37 @@ export default function MapView() {
             false,
           );
         }}
+      />
+
+      {/* Modal de criação de relação */}
+      <CreateRelationModal
+        open={isRelationModalOpen}
+        sourceName={
+          pendingRelation
+          ? locations.find(
+              (location) =>
+                location.id ===
+                pendingRelation.sourceId,
+            )?.name
+          : undefined
+        }
+        targetName={
+          pendingRelation
+          ? locations.find(
+              (location) =>
+                location.id ===
+                pendingRelation.targetId,
+            )?.name
+          : undefined
+        }
+        onCancel={() => {
+          setPendingRelation(null);
+          setSelectedLineLocationIds([]);
+          setIsRelationModalOpen(false);
+        }}
+        onRelationCreated={
+          handleRelationCreated
+        }
       />
 
       {/* Modal de criação de zona */}
