@@ -1,19 +1,21 @@
+import GraphView from "@/components/graph/graph-view";
+
 export default function GraphPage() {
   return (
-    <section className="min-h-[calc(100vh-3.5rem)] bg-slate-950 p-8 text-slate-100">
-      <div className="mx-auto max-w-6xl">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Grafo
-        </h1>
+    <section className="h-[calc(100vh-3.5rem)] bg-slate-950 text-slate-100">
+      <div className="flex h-full flex-col">
+        <div className="border-b border-slate-800 px-6 py-4">
+          <h1 className="text-xl font-semibold tracking-tight">
+            Grafo
+          </h1>
 
-        <p className="mt-2 text-sm text-slate-400">
-          Visualização das conexões entre os locais.
-        </p>
-
-        <div className="mt-8 rounded-xl border border-slate-800 bg-slate-900/50 p-8">
-          <p className="text-sm text-slate-500">
-            Funcionalidade em desenvolvimento.
+          <p className="mt-1 text-sm text-slate-400">
+            Visualização das conexões entre os locais cadastrados.
           </p>
+        </div>
+
+        <div className="min-h-0 flex-1">
+          <GraphView />
         </div>
       </div>
     </section>

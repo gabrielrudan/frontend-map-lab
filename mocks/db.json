@@ -23,6 +23,14 @@
       "lat": -3.7293952851359364,
       "lng": -38.5268251801092,
       "id": "tEYJDjksavs"
+    },
+    {
+      "name": "Local 4 teste",
+      "description": "Testando novamente",
+      "type": "tipo-c",
+      "lat": -3.7260940446965805,
+      "lng": -38.529864089005315,
+      "id": "JoYTuwrv_yI"
     }
   ],
   "zones": [
@@ -75,6 +83,12 @@
       "sourceId": "YafIm1rC4Lw",
       "targetId": "7W2Exsc05Kg",
       "id": "URbYEAfICIU"
+    },
+    {
+      "name": "Entrega para",
+      "sourceId": "YafIm1rC4Lw",
+      "targetId": "tEYJDjksavs",
+      "id": "OKNenCyjweI"
     }
   ],
   "$schema": "./node_modules/json-server/schema.json"
