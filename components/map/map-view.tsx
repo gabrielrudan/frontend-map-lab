@@ -5,7 +5,11 @@ import * as maplibregl from "maplibre-gl";
 
 import CreateLocationModal from "@/components/location/create-location-modal";
 import LocationDetailsModal from "@/components/location/location-details-modal";
-import type { Location } from "@/types/location";
+import { locationService } from "@/services/locationService";
+import type {
+  CreateLocationDto,
+  Location,
+} from "@/types/location";
 
 import "./lib/mapWorker";
 
@@ -33,6 +37,36 @@ export default function MapView() {
   const [isDetailsModalOpen, setIsDetailsModalOpen] =
     useState(false);
 
+  async function loadLocations() {
+    try {
+      const data = await locationService.getAll();
+
+      setLocations(data);
+    } catch (error) {
+      console.error("Erro ao carregar locais:", error);
+    }
+  }
+
+  // Carrega os locais já persistidos na API simulada
+  useEffect(() => {
+    let cancelled = false;
+
+    locationService
+      .getAll()
+      .then((data) => {
+        if (!cancelled) {
+          setLocations(data);
+        }
+      })
+      .catch((error) => {
+        console.error("Erro ao carregar locais:", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Criação do mapa
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
@@ -55,7 +89,6 @@ export default function MapView() {
         },
 
         layers: [
-          // Fundo usado enquanto os tiles estão carregando
           {
             id: "dark-background",
             type: "background",
@@ -64,7 +97,6 @@ export default function MapView() {
             },
           },
 
-          // Mapa base escurecido e levemente azulado
           {
             id: "osm",
             type: "raster",
@@ -134,8 +166,6 @@ export default function MapView() {
       );
 
       markerElement.addEventListener("click", (event) => {
-        // Impede que o clique no marker abra também
-        // o modal de criação de um novo local.
         event.stopPropagation();
 
         setSelectedLocation(location);
@@ -151,14 +181,19 @@ export default function MapView() {
     });
   }, [locations]);
 
-  function handleLocationCreated(location: Location) {
-    setLocations((previousLocations) => [
-      ...previousLocations,
-      location,
-    ]);
+  async function handleLocationCreated(
+    location: CreateLocationDto,
+  ) {
+    try {
+      await locationService.create(location);
 
-    setSelectedPosition(null);
-    setIsCreateModalOpen(false);
+      await loadLocations();
+
+      setSelectedPosition(null);
+      setIsCreateModalOpen(false);
+    } catch (error) {
+      console.error("Erro ao cadastrar local:", error);
+    }
   }
 
   return (

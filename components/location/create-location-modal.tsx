@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-import type { Location } from "@/types/location";
+import type { CreateLocationDto } from "@/types/location";
 
 type Position = {
   lat: number;
@@ -33,7 +33,7 @@ type CreateLocationModalProps = {
   open: boolean;
   position: Position | null;
   onCancel: () => void;
-  onLocationCreated: (location: Location) => void;
+  onLocationCreated: (location: CreateLocationDto) => void;
 };
 
 export default function CreateLocationModal({
@@ -64,8 +64,7 @@ export default function CreateLocationModal({
       return;
     }
 
-    const location: Location = {
-      id: crypto.randomUUID(),
+    const location: CreateLocationDto = {
       name: name.trim(),
       description: description.trim(),
       type,

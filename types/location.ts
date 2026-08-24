@@ -6,3 +6,5 @@ export interface Location {
   lat: number;
   lng: number;
 }
+
+export type CreateLocationDto = Omit<Location, "id">;

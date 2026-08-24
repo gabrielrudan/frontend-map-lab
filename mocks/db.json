@@ -1,0 +1,15 @@
+{
+  "locations": [
+    {
+      "name": "Local 1",
+      "description": "Descrição do local de teste",
+      "type": "tipo-a",
+      "lat": -3.731192514550415,
+      "lng": -38.526030246793056,
+      "id": "7W2Exsc05Kg"
+    }
+  ],
+  "zones": [],
+  "relations": [],
+  "$schema": "./node_modules/json-server/schema.json"
+}

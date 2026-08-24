@@ -9,10 +9,12 @@
     "prebuild": "node scripts/copy-maplibre-worker.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "server": "json-server mocks/db.json --port 3001"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
+    "axios": "^1.19.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.33.0",
@@ -31,6 +33,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
+    "json-server": "^1.0.0-beta.15",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
