@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 
+import ZoneDetailsModal from "@/components/zone/zone-details-modal";
+import { pointsInPolygon } from "@/utils/poinstInPolygon";
+
 import CreateLocationModal from "@/components/location/create-location-modal";
 import LocationDetailsModal from "@/components/location/location-details-modal";
 import CreateZoneModal from "@/components/zone/create-zone-modal";
@@ -130,6 +133,21 @@ export default function MapView() {
     isZoneModalOpen,
     setIsZoneModalOpen,
   ] = useState(false);
+
+  const [
+    selectedZone,
+    setSelectedZone,
+  ] = useState<Zone | null>(null);
+
+  const [
+    locationsInsideZone,
+    setLocationsInsideZone,
+  ] = useState<Location[]>([]);
+
+  const [
+    isZoneDetailsOpen,
+    setIsZoneDetailsOpen,
+  ] = useState(false);  
 
   /*
    * =====================================================
@@ -368,6 +386,14 @@ export default function MapView() {
         },
       });
 
+      map.on("mouseenter", "zones-fill", () => {
+        map.getCanvas().style.cursor = "pointer";
+      });
+
+      map.on("mouseleave", "zones-fill", () => {
+        map.getCanvas().style.cursor = "";
+      });      
+
       /*
        * -----------------------------------------------
        * Zona que está sendo desenhada
@@ -477,11 +503,62 @@ export default function MapView() {
     function handleMapClick(
       event: maplibregl.MapMouseEvent,
     ) {
+      if (!map) return;
+
+      const features = map.queryRenderedFeatures(
+        event.point,
+        {
+          layers: ["zones-fill"],
+        },
+      );
+
+      const clickedZoneFeature =
+        features[0];
+
       const { lat, lng } = event.lngLat;
 
       /*
        * Modo Zona
        */
+
+      if (
+        !isZoneMode &&
+        !isLineMode &&
+        clickedZoneFeature
+      ) {
+        const zoneId =
+          clickedZoneFeature.properties?.id;
+
+        const zone = zones.find(
+          (candidate) =>
+            candidate.id === zoneId,
+        );
+
+        if (zone) {
+          const pointsInside =
+            locations.filter(
+              (location) =>
+                pointsInPolygon(
+                  {
+                    lat: location.lat,
+                    lng: location.lng,
+                  },
+                  zone.coordinates,
+                ),
+            );
+
+          setSelectedZone(zone);
+
+          setLocationsInsideZone(
+            pointsInside,
+          );
+
+          setIsZoneDetailsOpen(true);
+
+          return;
+        }
+      }      
+
       if (isZoneMode) {
         setDrawingCoordinates(
           (previousCoordinates) => [
@@ -529,6 +606,8 @@ export default function MapView() {
   }, [
     isLineMode,
     isZoneMode,
+    zones,
+    locations,
   ]);
 
   /*
@@ -1196,6 +1275,20 @@ export default function MapView() {
           handleZoneCreated
         }
       />
-    </div>
+      <ZoneDetailsModal
+        open={isZoneDetailsOpen}
+        zone={selectedZone}
+        locationsInsideZone={
+          locationsInsideZone
+        }
+        onCancel={() => {
+          setSelectedZone(null);
+
+          setLocationsInsideZone([]);
+
+          setIsZoneDetailsOpen(false);
+        }}
+      />
+    </div>    
   );
 }
