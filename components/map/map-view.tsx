@@ -5,11 +5,22 @@ import * as maplibregl from "maplibre-gl";
 
 import CreateLocationModal from "@/components/location/create-location-modal";
 import LocationDetailsModal from "@/components/location/location-details-modal";
+import CreateZoneModal from "@/components/zone/create-zone-modal";
+
 import { locationService } from "@/services/locationService";
+import { zoneService } from "@/services/zoneService";
+
+import type * as GeoJSON from "geojson";
+
 import type {
   CreateLocationDto,
   Location,
 } from "@/types/location";
+import type { Coordinate } from "@/types/coordinate";
+import type {
+  CreateZoneFormDto,
+  Zone,
+} from "@/types/zone";
 
 import "./lib/mapWorker";
 
@@ -18,39 +29,148 @@ type Position = {
   lng: number;
 };
 
+const emptyFeatureCollection = {
+  type: "FeatureCollection" as const,
+  features: [],
+};
+
+function coordinatesToRing(
+  coordinates: Coordinate[],
+): number[][] {
+  if (coordinates.length === 0) {
+    return [];
+  }
+
+  const ring = coordinates.map((coordinate) => [
+    coordinate.lng,
+    coordinate.lat,
+  ]);
+
+  const firstCoordinate = coordinates[0];
+
+  ring.push([
+    firstCoordinate.lng,
+    firstCoordinate.lat,
+  ]);
+
+  return ring;
+}
+
 export default function MapView() {
-  const mapContainer = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
-  const markersRef = useRef<maplibregl.Marker[]>([]);
+  const mapContainer =
+    useRef<HTMLDivElement | null>(null);
 
-  const [locations, setLocations] = useState<Location[]>([]);
+  const mapRef =
+    useRef<maplibregl.Map | null>(null);
 
-  const [selectedPosition, setSelectedPosition] =
-    useState<Position | null>(null);
+  const markersRef =
+    useRef<maplibregl.Marker[]>([]);
 
-  const [isCreateModalOpen, setIsCreateModalOpen] =
+  /*
+   * =====================================================
+   * LOCAIS
+   * =====================================================
+   */
+
+  const [locations, setLocations] =
+    useState<Location[]>([]);
+
+  const [
+    selectedPosition,
+    setSelectedPosition,
+  ] = useState<Position | null>(null);
+
+  const [
+    isCreateModalOpen,
+    setIsCreateModalOpen,
+  ] = useState(false);
+
+  const [
+    selectedLocation,
+    setSelectedLocation,
+  ] = useState<Location | null>(null);
+
+  const [
+    isDetailsModalOpen,
+    setIsDetailsModalOpen,
+  ] = useState(false);
+
+  /*
+   * =====================================================
+   * LINHAS
+   * =====================================================
+   */
+
+  const [isLineMode, setIsLineMode] =
     useState(false);
 
-  const [selectedLocation, setSelectedLocation] =
-    useState<Location | null>(null);
+  const [
+    selectedLineLocationIds,
+    setSelectedLineLocationIds,
+  ] = useState<string[]>([]);
 
-  const [isDetailsModalOpen, setIsDetailsModalOpen] =
+  /*
+   * =====================================================
+   * ZONAS
+   * =====================================================
+   */
+
+  const [zones, setZones] =
+    useState<Zone[]>([]);
+
+  const [isZoneMode, setIsZoneMode] =
     useState(false);
 
-  // Controle da ferramenta de linha
-  const [isLineMode, setIsLineMode] = useState(false);
+  const [
+    drawingCoordinates,
+    setDrawingCoordinates,
+  ] = useState<Coordinate[]>([]);
 
-  const [selectedLineLocationIds, setSelectedLineLocationIds] =
-    useState<string[]>([]);
+  const [
+    isZoneModalOpen,
+    setIsZoneModalOpen,
+  ] = useState(false);
 
-  const [isMapLoaded, setIsMapLoaded] = useState(false);
+  /*
+   * =====================================================
+   * MAPA
+   * =====================================================
+   */
+
+  const [isMapLoaded, setIsMapLoaded] =
+    useState(false);
+
+  /*
+   * =====================================================
+   * CARREGAMENTO DOS DADOS
+   * =====================================================
+   */
 
   async function loadLocations() {
     try {
-      const data = await locationService.getAll();
+      const data =
+        await locationService.getAll();
+
       setLocations(data);
     } catch (error) {
-      console.error("Erro ao carregar locais:", error);
+      console.error(
+        "Erro ao carregar locais:",
+        error,
+      );
+    }
+  }
+
+  async function loadZones() {
+    try {
+      const data =
+        await zoneService.getAll();
+
+      setZones(data);
+    } catch (error) {
+      console.error(
+        "Erro ao carregar zonas:",
+        error,
+      );
     }
   }
 
@@ -66,7 +186,10 @@ export default function MapView() {
         }
       })
       .catch((error) => {
-        console.error("Erro ao carregar locais:", error);
+        console.error(
+          "Erro ao carregar locais:",
+          error,
+        );
       });
 
     return () => {
@@ -74,9 +197,42 @@ export default function MapView() {
     };
   }, []);
 
-  // Criação do mapa
+  // Carrega zonas persistidas
   useEffect(() => {
-    if (!mapContainer.current || mapRef.current) return;
+    let cancelled = false;
+
+    zoneService
+      .getAll()
+      .then((data) => {
+        if (!cancelled) {
+          setZones(data);
+        }
+      })
+      .catch((error) => {
+        console.error(
+          "Erro ao carregar zonas:",
+          error,
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /*
+   * =====================================================
+   * CRIAÇÃO DO MAPA
+   * =====================================================
+   */
+
+  useEffect(() => {
+    if (
+      !mapContainer.current ||
+      mapRef.current
+    ) {
+      return;
+    }
 
     const map = new maplibregl.Map({
       container: mapContainer.current,
@@ -91,7 +247,9 @@ export default function MapView() {
               "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
             ],
             tileSize: 256,
-            attribution: "© OpenStreetMap contributors",
+            maxzoom: 18,
+            attribution:
+              "© OpenStreetMap contributors",
           },
         },
 
@@ -108,6 +266,7 @@ export default function MapView() {
             id: "osm",
             type: "raster",
             source: "osm",
+
             paint: {
               "raster-brightness-min": 0.02,
               "raster-brightness-max": 0.42,
@@ -121,6 +280,7 @@ export default function MapView() {
 
       center: [-38.5267, -3.7319],
       zoom: 11,
+      maxZoom: 18,
     });
 
     mapRef.current = map;
@@ -131,16 +291,17 @@ export default function MapView() {
     );
 
     map.on("load", () => {
-      // Fonte GeoJSON inicialmente vazia
+      /*
+       * -----------------------------------------------
+       * Polyline temporária
+       * -----------------------------------------------
+       */
+
       map.addSource("selected-line", {
         type: "geojson",
-        data: {
-          type: "FeatureCollection",
-          features: [],
-        },
+        data: emptyFeatureCollection,
       });
 
-      // Camada que desenhará a Polyline
       map.addLayer({
         id: "selected-line-layer",
         type: "line",
@@ -158,15 +319,143 @@ export default function MapView() {
         },
       });
 
+      /*
+       * -----------------------------------------------
+       * Zonas persistidas
+       * -----------------------------------------------
+       */
+
+      map.addSource("zones", {
+        type: "geojson",
+        data: emptyFeatureCollection,
+      });
+
+      map.addLayer({
+        id: "zones-fill",
+        type: "fill",
+        source: "zones",
+
+        paint: {
+          "fill-color": [
+            "coalesce",
+            ["get", "color"],
+            "#3b82f6",
+          ],
+
+          "fill-opacity": 0.2,
+        },
+      });
+
+      map.addLayer({
+        id: "zones-line",
+        type: "line",
+        source: "zones",
+
+        layout: {
+          "line-cap": "round",
+          "line-join": "round",
+        },
+
+        paint: {
+          "line-color": [
+            "coalesce",
+            ["get", "color"],
+            "#3b82f6",
+          ],
+
+          "line-width": 3,
+          "line-opacity": 0.9,
+        },
+      });
+
+      /*
+       * -----------------------------------------------
+       * Zona que está sendo desenhada
+       * -----------------------------------------------
+       */
+
+      map.addSource("drawing-zone", {
+        type: "geojson",
+        data: emptyFeatureCollection,
+      });
+
+      // Preenchimento temporário
+      map.addLayer({
+        id: "drawing-zone-fill",
+        type: "fill",
+        source: "drawing-zone",
+
+        filter: [
+          "==",
+          ["geometry-type"],
+          "Polygon",
+        ],
+
+        paint: {
+          "fill-color": "#3b82f6",
+          "fill-opacity": 0.15,
+        },
+      });
+
+      // Linhas temporárias
+      map.addLayer({
+        id: "drawing-zone-line",
+        type: "line",
+        source: "drawing-zone",
+
+        filter: [
+          "==",
+          ["geometry-type"],
+          "LineString",
+        ],
+
+        layout: {
+          "line-cap": "round",
+          "line-join": "round",
+        },
+
+        paint: {
+          "line-color": "#60a5fa",
+          "line-width": 3,
+          "line-dasharray": [2, 2],
+        },
+      });
+
+      // Vértices temporários
+      map.addLayer({
+        id: "drawing-zone-vertices",
+        type: "circle",
+        source: "drawing-zone",
+
+        filter: [
+          "==",
+          ["geometry-type"],
+          "Point",
+        ],
+
+        paint: {
+          "circle-color": "#3b82f6",
+          "circle-radius": 6,
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 2,
+        },
+      });
+
       setIsMapLoaded(true);
     });
 
     map.on("error", (event) => {
-      console.error("Erro no MapLibre:", event.error);
+      console.error(
+        "Erro no MapLibre:",
+        event.error,
+      );
     });
 
     return () => {
-      markersRef.current.forEach((marker) => marker.remove());
+      markersRef.current.forEach(
+        (marker) => marker.remove(),
+      );
+
       markersRef.current = [];
 
       map.remove();
@@ -174,104 +463,201 @@ export default function MapView() {
     };
   }, []);
 
-  // Clique comum no mapa:
-  // só cadastra local quando NÃO estivermos traçando uma linha
+  /*
+   * =====================================================
+   * CLIQUE NO MAPA
+   * =====================================================
+   */
+
   useEffect(() => {
     const map = mapRef.current;
 
     if (!map) return;
 
-    function handleMapClick(event: maplibregl.MapMouseEvent) {
-      if (isLineMode) return;
-
+    function handleMapClick(
+      event: maplibregl.MapMouseEvent,
+    ) {
       const { lat, lng } = event.lngLat;
 
-      setSelectedPosition({ lat, lng });
+      /*
+       * Modo Zona
+       */
+      if (isZoneMode) {
+        setDrawingCoordinates(
+          (previousCoordinates) => [
+            ...previousCoordinates,
+            {
+              lat,
+              lng,
+            },
+          ],
+        );
+
+        return;
+      }
+
+      /*
+       * Modo Linha
+       */
+      if (isLineMode) {
+        return;
+      }
+
+      /*
+       * Modo padrão:
+       * cadastrar local
+       */
+      setSelectedPosition({
+        lat,
+        lng,
+      });
+
       setIsCreateModalOpen(true);
     }
 
-    map.on("click", handleMapClick);
+    map.on(
+      "click",
+      handleMapClick,
+    );
 
     return () => {
-      map.off("click", handleMapClick);
+      map.off(
+        "click",
+        handleMapClick,
+      );
     };
-  }, [isLineMode]);
+  }, [
+    isLineMode,
+    isZoneMode,
+  ]);
 
-  // Criação / atualização dos pins
+  /*
+   * =====================================================
+   * MARKERS
+   * =====================================================
+   */
+
   useEffect(() => {
     const map = mapRef.current;
 
     if (!map) return;
 
-    markersRef.current.forEach((marker) => {
-      marker.remove();
-    });
+    markersRef.current.forEach(
+      (marker) => marker.remove(),
+    );
 
-    markersRef.current = locations.map((location) => {
-      const markerElement = document.createElement("button");
+    markersRef.current =
+      locations.map((location) => {
+        const markerElement =
+          document.createElement("button");
 
-      markerElement.type = "button";
+        markerElement.type =
+          "button";
 
-      const isSelected =
-        selectedLineLocationIds.includes(location.id);
+        const isSelected =
+          selectedLineLocationIds.includes(
+            location.id,
+          );
 
-      markerElement.className = isSelected
-        ? "map-pin map-pin-selected"
-        : "map-pin";
+        markerElement.className =
+          isSelected
+            ? "map-pin map-pin-selected"
+            : "map-pin";
 
-      markerElement.title = isLineMode
-        ? `Selecionar ${location.name}`
-        : location.name;
+        markerElement.title =
+          isLineMode
+            ? `Selecionar ${location.name}`
+            : location.name;
 
-      markerElement.setAttribute(
-        "aria-label",
-        isLineMode
-          ? `Selecionar ${location.name} para traçar linha`
-          : `Abrir detalhes de ${location.name}`,
-      );
+        markerElement.setAttribute(
+          "aria-label",
+          isLineMode
+            ? `Selecionar ${location.name} para traçar linha`
+            : `Abrir detalhes de ${location.name}`,
+        );
 
-      markerElement.addEventListener("click", (event) => {
-        event.stopPropagation();
+        markerElement.addEventListener(
+          "click",
+          (event) => {
+            event.stopPropagation();
 
-        // Modo de desenho de linha
-        if (isLineMode) {
-          setSelectedLineLocationIds((previous) => {
-            // Não seleciona o mesmo ponto duas vezes
-            if (previous.includes(location.id)) {
-              return previous;
+            /*
+             * Durante desenho de zona,
+             * clique em marker não faz nada.
+             */
+            if (isZoneMode) {
+              return;
             }
 
-            // Se uma linha já estava completa,
-            // clicar em outro ponto inicia uma nova seleção
-            if (previous.length >= 2) {
-              return [location.id];
+            /*
+             * Modo de linha
+             */
+            if (isLineMode) {
+              setSelectedLineLocationIds(
+                (previous) => {
+                  if (
+                    previous.includes(
+                      location.id,
+                    )
+                  ) {
+                    return previous;
+                  }
+
+                  if (
+                    previous.length >= 2
+                  ) {
+                    return [
+                      location.id,
+                    ];
+                  }
+
+                  return [
+                    ...previous,
+                    location.id,
+                  ];
+                },
+              );
+
+              return;
             }
 
-            return [...previous, location.id];
-          });
+            /*
+             * Modo normal:
+             * detalhes do local
+             */
+            setSelectedLocation(
+              location,
+            );
 
-          return;
-        }
+            setIsDetailsModalOpen(
+              true,
+            );
+          },
+        );
 
-        // Modo normal: abre detalhes
-        setSelectedLocation(location);
-        setIsDetailsModalOpen(true);
+        return new maplibregl.Marker({
+          element: markerElement,
+          anchor: "bottom",
+        })
+          .setLngLat([
+            location.lng,
+            location.lat,
+          ])
+          .addTo(map);
       });
-
-      return new maplibregl.Marker({
-        element: markerElement,
-        anchor: "bottom",
-      })
-        .setLngLat([location.lng, location.lat])
-        .addTo(map);
-    });
   }, [
     locations,
     isLineMode,
+    isZoneMode,
     selectedLineLocationIds,
   ]);
 
-  // Desenha a linha entre os dois locais selecionados
+  /*
+   * =====================================================
+   * POLYLINE
+   * =====================================================
+   */
+
   useEffect(() => {
     if (!isMapLoaded) return;
 
@@ -279,32 +665,46 @@ export default function MapView() {
 
     if (!map) return;
 
-    const source = map.getSource(
-      "selected-line",
-    ) as maplibregl.GeoJSONSource | undefined;
+    const source =
+      map.getSource(
+        "selected-line",
+      ) as
+        | maplibregl.GeoJSONSource
+        | undefined;
 
     if (!source) return;
 
-    if (selectedLineLocationIds.length !== 2) {
-      source.setData({
-        type: "FeatureCollection",
-        features: [],
-      });
+    if (
+      selectedLineLocationIds.length !==
+      2
+    ) {
+      source.setData(
+        emptyFeatureCollection,
+      );
 
       return;
     }
 
-    const firstLocation = locations.find(
-      (location) =>
-        location.id === selectedLineLocationIds[0],
-    );
+    const firstLocation =
+      locations.find(
+        (location) =>
+          location.id ===
+          selectedLineLocationIds[0],
+      );
 
-    const secondLocation = locations.find(
-      (location) =>
-        location.id === selectedLineLocationIds[1],
-    );
+    const secondLocation =
+      locations.find(
+        (location) =>
+          location.id ===
+          selectedLineLocationIds[1],
+      );
 
-    if (!firstLocation || !secondLocation) return;
+    if (
+      !firstLocation ||
+      !secondLocation
+    ) {
+      return;
+    }
 
     source.setData({
       type: "FeatureCollection",
@@ -312,6 +712,7 @@ export default function MapView() {
       features: [
         {
           type: "Feature",
+
           properties: {},
 
           geometry: {
@@ -322,6 +723,7 @@ export default function MapView() {
                 firstLocation.lng,
                 firstLocation.lat,
               ],
+
               [
                 secondLocation.lng,
                 secondLocation.lat,
@@ -337,15 +739,194 @@ export default function MapView() {
     locations,
   ]);
 
+  /*
+   * =====================================================
+   * DESENHO TEMPORÁRIO DA ZONA
+   * =====================================================
+   */
+
+  useEffect(() => {
+    if (!isMapLoaded) return;
+
+    const map = mapRef.current;
+
+    if (!map) return;
+
+    const source =
+      map.getSource(
+        "drawing-zone",
+      ) as
+        | maplibregl.GeoJSONSource
+        | undefined;
+
+    if (!source) return;
+
+    if (
+      !isZoneMode ||
+      drawingCoordinates.length === 0
+    ) {
+      source.setData(
+        emptyFeatureCollection,
+      );
+
+      return;
+    }
+
+    const features: GeoJSON.Feature[] =
+      drawingCoordinates.map(
+        (coordinate) => ({
+          type: "Feature",
+
+          properties: {},
+
+          geometry: {
+            type: "Point",
+
+            coordinates: [
+              coordinate.lng,
+              coordinate.lat,
+            ],
+          },
+        }),
+      );
+
+    /*
+     * A partir de 2 pontos,
+     * desenha uma linha.
+     */
+    if (
+      drawingCoordinates.length >= 2
+    ) {
+      features.push({
+        type: "Feature",
+
+        properties: {},
+
+        geometry: {
+          type: "LineString",
+
+          coordinates:
+            drawingCoordinates.map(
+              (coordinate) => [
+                coordinate.lng,
+                coordinate.lat,
+              ],
+            ),
+        },
+      });
+    }
+
+    /*
+     * A partir de 3 pontos,
+     * já conseguimos visualizar
+     * o polígono.
+     */
+    if (
+      drawingCoordinates.length >= 3
+    ) {
+      features.push({
+        type: "Feature",
+
+        properties: {},
+
+        geometry: {
+          type: "Polygon",
+
+          coordinates: [
+            coordinatesToRing(
+              drawingCoordinates,
+            ),
+          ],
+        },
+      });
+    }
+
+    source.setData({
+      type: "FeatureCollection",
+      features,
+    });
+  }, [
+    isMapLoaded,
+    isZoneMode,
+    drawingCoordinates,
+  ]);
+
+  /*
+   * =====================================================
+   * ZONAS PERSISTIDAS
+   * =====================================================
+   */
+
+  useEffect(() => {
+    if (!isMapLoaded) return;
+
+    const map = mapRef.current;
+
+    if (!map) return;
+
+    const source =
+      map.getSource(
+        "zones",
+      ) as
+        | maplibregl.GeoJSONSource
+        | undefined;
+
+    if (!source) return;
+
+    const features =
+      zones
+        .filter(
+          (zone) =>
+            zone.coordinates.length >=
+            3,
+        )
+        .map((zone) => ({
+          type: "Feature" as const,
+
+          properties: {
+            id: zone.id,
+            name: zone.name,
+            color: zone.color,
+          },
+
+          geometry: {
+            type: "Polygon" as const,
+
+            coordinates: [
+              coordinatesToRing(
+                zone.coordinates,
+              ),
+            ],
+          },
+        }));
+
+    source.setData({
+      type: "FeatureCollection",
+      features,
+    });
+  }, [
+    isMapLoaded,
+    zones,
+  ]);
+
+  /*
+   * =====================================================
+   * CADASTRO DE LOCAL
+   * =====================================================
+   */
+
   async function handleLocationCreated(
     location: CreateLocationDto,
   ) {
     try {
-      await locationService.create(location);
+      await locationService.create(
+        location,
+      );
 
       await loadLocations();
 
       setSelectedPosition(null);
+
       setIsCreateModalOpen(false);
     } catch (error) {
       console.error(
@@ -355,14 +936,105 @@ export default function MapView() {
     }
   }
 
+  /*
+   * =====================================================
+   * CADASTRO DE ZONA
+   * =====================================================
+   */
+
+  async function handleZoneCreated(
+    data: CreateZoneFormDto,
+  ) {
+    try {
+      if (
+        drawingCoordinates.length <
+        3
+      ) {
+        return;
+      }
+
+      await zoneService.create({
+        name: data.name,
+        color: data.color,
+        coordinates:
+          drawingCoordinates,
+      });
+
+      await loadZones();
+
+      setDrawingCoordinates([]);
+
+      setIsZoneModalOpen(false);
+
+      setIsZoneMode(false);
+    } catch (error) {
+      console.error(
+        "Erro ao cadastrar zona:",
+        error,
+      );
+    }
+  }
+
+  /*
+   * =====================================================
+   * CONTROLES DA LINHA
+   * =====================================================
+   */
+
   function toggleLineMode() {
-    setIsLineMode((previous) => !previous);
+    setIsLineMode(
+      (previous) => !previous,
+    );
+
+    setIsZoneMode(false);
+
+    setDrawingCoordinates([]);
+
     setSelectedLineLocationIds([]);
   }
 
   function clearLine() {
     setSelectedLineLocationIds([]);
   }
+
+  /*
+   * =====================================================
+   * CONTROLES DA ZONA
+   * =====================================================
+   */
+
+  function toggleZoneMode() {
+    setIsZoneMode(
+      (previous) => !previous,
+    );
+
+    setIsLineMode(false);
+
+    setSelectedLineLocationIds([]);
+
+    setDrawingCoordinates([]);
+  }
+
+  function cancelZoneDrawing() {
+    setDrawingCoordinates([]);
+    setIsZoneMode(false);
+  }
+
+  function finishZoneDrawing() {
+    if (
+      drawingCoordinates.length < 3
+    ) {
+      return;
+    }
+
+    setIsZoneModalOpen(true);
+  }
+
+  /*
+   * =====================================================
+   * RENDER
+   * =====================================================
+   */
 
   return (
     <div className="relative">
@@ -371,8 +1043,9 @@ export default function MapView() {
         className="h-[calc(100vh-3.5rem)] w-full"
       />
 
-      {/* Toolbar simples do mapa */}
-      <div className="absolute left-4 top-4 z-10 flex gap-2">
+      {/* Toolbar */}
+      <div className="absolute left-4 top-4 z-10 flex flex-wrap gap-2">
+        {/* Linha */}
         <button
           type="button"
           onClick={toggleLineMode}
@@ -387,48 +1060,141 @@ export default function MapView() {
             : "Traçar linha"}
         </button>
 
-        {selectedLineLocationIds.length > 0 && (
-          <button
-            type="button"
-            onClick={clearLine}
-            className="rounded-lg border border-slate-700 bg-slate-950/90 px-4 py-2 text-sm text-slate-300 shadow-lg hover:bg-slate-900"
-          >
-            Limpar
-          </button>
-        )}
+        {/* Zona */}
+        <button
+          type="button"
+          onClick={toggleZoneMode}
+          className={
+            isZoneMode
+              ? "rounded-lg border border-blue-500 bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-lg"
+              : "rounded-lg border border-slate-700 bg-slate-950/90 px-4 py-2 text-sm font-medium text-slate-200 shadow-lg hover:bg-slate-900"
+          }
+        >
+          {isZoneMode
+            ? "Desenhando zona"
+            : "Desenhar zona"}
+        </button>
+
+        {/* Limpar linha */}
+        {isLineMode &&
+          selectedLineLocationIds.length >
+            0 && (
+            <button
+              type="button"
+              onClick={clearLine}
+              className="rounded-lg border border-slate-700 bg-slate-950/90 px-4 py-2 text-sm text-slate-300 shadow-lg hover:bg-slate-900"
+            >
+              Limpar linha
+            </button>
+          )}
+
+        {/* Finalizar zona */}
+        {isZoneMode &&
+          drawingCoordinates.length >=
+            3 && (
+            <button
+              type="button"
+              onClick={
+                finishZoneDrawing
+              }
+              className="rounded-lg border border-emerald-500 bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-lg hover:bg-emerald-500"
+            >
+              Finalizar zona
+            </button>
+          )}
+
+        {/* Cancelar zona */}
+        {isZoneMode &&
+          drawingCoordinates.length >
+            0 && (
+            <button
+              type="button"
+              onClick={
+                cancelZoneDrawing
+              }
+              className="rounded-lg border border-slate-700 bg-slate-950/90 px-4 py-2 text-sm text-slate-300 shadow-lg hover:bg-slate-900"
+            >
+              Cancelar
+            </button>
+          )}
       </div>
 
-      {/* Instrução visual */}
+      {/* Mensagem: linha */}
       {isLineMode && (
         <div className="absolute left-4 top-16 z-10 rounded-lg border border-slate-800 bg-slate-950/90 px-4 py-3 text-sm text-slate-300 shadow-lg">
-          {selectedLineLocationIds.length === 0 &&
+          {selectedLineLocationIds.length ===
+            0 &&
             "Selecione o primeiro ponto."}
 
-          {selectedLineLocationIds.length === 1 &&
+          {selectedLineLocationIds.length ===
+            1 &&
             "Agora selecione o segundo ponto."}
 
-          {selectedLineLocationIds.length === 2 &&
+          {selectedLineLocationIds.length ===
+            2 &&
             "Linha criada entre os dois pontos."}
         </div>
       )}
 
+      {/* Mensagem: zona */}
+      {isZoneMode && (
+        <div className="absolute left-4 top-16 z-10 rounded-lg border border-slate-800 bg-slate-950/90 px-4 py-3 text-sm text-slate-300 shadow-lg">
+          {drawingCoordinates.length ===
+            0 &&
+            "Clique no mapa para adicionar o primeiro vértice."}
+
+          {drawingCoordinates.length ===
+            1 &&
+            "Adicione pelo menos mais dois vértices."}
+
+          {drawingCoordinates.length ===
+            2 &&
+            "Adicione mais um vértice para formar a zona."}
+
+          {drawingCoordinates.length >=
+            3 &&
+            `${drawingCoordinates.length} vértices selecionados. Você já pode finalizar a zona.`}
+        </div>
+      )}
+
+      {/* Modal de criação de local */}
       <CreateLocationModal
         open={isCreateModalOpen}
         position={selectedPosition}
         onCancel={() => {
           setSelectedPosition(null);
-          setIsCreateModalOpen(false);
+
+          setIsCreateModalOpen(
+            false,
+          );
         }}
-        onLocationCreated={handleLocationCreated}
+        onLocationCreated={
+          handleLocationCreated
+        }
       />
 
+      {/* Modal de detalhes */}
       <LocationDetailsModal
         open={isDetailsModalOpen}
         location={selectedLocation}
         onCancel={() => {
           setSelectedLocation(null);
-          setIsDetailsModalOpen(false);
+
+          setIsDetailsModalOpen(
+            false,
+          );
         }}
+      />
+
+      {/* Modal de criação de zona */}
+      <CreateZoneModal
+        open={isZoneModalOpen}
+        onCancel={() => {
+          setIsZoneModalOpen(false);
+        }}
+        onZoneCreated={
+          handleZoneCreated
+        }
       />
     </div>
   );
